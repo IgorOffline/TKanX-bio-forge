@@ -124,7 +124,7 @@ flowchart TD
   - **Priority 4**: No pH → preserve user name (salt bridge didn't trigger)
   - **Priority 5**: Apply HisStrategy (DirectHID/DirectHIE/Random/HbNetwork)
 - **Phase 3: Hydrogen Addition** – Adds hydrogen atoms to all residues based on their final protonation states. Reconstructs geometry using template anchors and Kabsch alignment. Handles terminal-specific hydrogens:
-  - **N-terminal**: H1/H2/H3 (protonated) or H1/H2 (deprotonated, pH > 8.0)
+  - **N-terminal**: standard residues H1/H2/H3 (protonated) or H1/H2 (deprotonated, pH > 8.0); proline H2/H3 (protonated) or H2 (deprotonated)
   - **C-terminal**: HOXT (protonated, pH < 3.1) or no HOXT (deprotonated)
   - **5'-terminal nucleic**: HO5' (no phosphate) or HOP3 (phosphate + pH < 6.5)
   - **3'-terminal nucleic**: HO3'
@@ -207,7 +207,7 @@ flowchart TD
 - **Anchor selection** – Each template hydrogen lists one or more anchor atoms; missing anchors trigger `IncompleteResidueForHydro` errors to avoid guesswork.
 - **Rigid transform** – `reconstruct_geometry` retrieves the residue-specific transform (rotation + translation) derived from current heavy atoms and applies it to the template hydrogen coordinate.
 - **Randomization** – None is applied for standard hydrogens, ensuring deterministic placement; terminals use evenly spaced tetrahedral vectors sorted by dot product to preserve orientation.
-- **Terminal logic** – N-termini place up to three hydrogens arranged around the N–CA axis; C-termini add HOXT to OXT; nucleic 5'-terminals either add HO5' (no phosphate) or pH-dependent HOP3 (with phosphate, below pKₐ₂ ≈ 6.5); nucleic 3'-terminals always add HO3'.
+- **Terminal logic** – N-termini place hydrogens derived from local bond geometry; standard residues distribute H1/H2/H3 evenly around the N–CA axis, while proline uses anti-bisector geometry across N–CA and N–CD to place H2/H3 (protonated) or H2 (deprotonated); C-termini add HOXT to OXT; nucleic 5'-terminals either add HO5' (no phosphate) or pH-dependent HOP3 (with phosphate, below pKₐ₂ ≈ 6.5); nucleic 3'-terminals always add HO3'.
 
 ### 4.3 Ion Replacement and Degradation Handling
 
