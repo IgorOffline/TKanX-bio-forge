@@ -716,7 +716,7 @@ fn c_term_is_protonated(target_ph: Option<f64>) -> bool {
     effective_terminal_ph(target_ph) < C_TERM_PKA
 }
 
-/// Rebuilds the N-terminal amine hydrogens using tetrahedral geometry.
+/// Rebuilds the N-terminal amine hydrogens using tetrahedral sp³ geometry.
 fn construct_n_term_hydrogens(residue: &mut Residue, protonated: bool) -> Result<(), Error> {
     residue.remove_atom("H");
     residue.remove_atom("H1");
@@ -732,22 +732,46 @@ fn construct_n_term_hydrogens(residue: &mut Residue, protonated: bool) -> Result
         .ok_or_else(|| Error::incomplete_for_hydro(&*residue.name, residue.id, "CA"))?
         .pos;
 
-    let (x, y, z) = build_sp3_frame(n_pos, ca_pos, None);
+    if residue.standard_name == Some(StandardResidue::PRO) {
+        let cd_pos = residue
+            .atom("CD")
+            .ok_or_else(|| Error::incomplete_for_hydro(&*residue.name, residue.id, "CD"))?
+            .pos;
 
-    let theta = SP3_ANGLE.to_radians();
-    let sin_theta = theta.sin();
-    let cos_theta = theta.cos();
+        let v_ca = (ca_pos - n_pos).normalize();
+        let v_cd = (cd_pos - n_pos).normalize();
+        let v_mid = -(v_ca + v_cd).normalize();
+        let v_perp = v_ca.cross(&v_cd).normalize();
 
-    let phases = [0.0_f64, 120.0, 240.0];
-    let target_count = if protonated { 3 } else { 2 };
-    let names = ["H1", "H2", "H3"];
+        let half_spread = (1.0_f64 / 3.0_f64.sqrt()).acos();
+        let h2_dir = v_mid * half_spread.cos() + v_perp * half_spread.sin();
+        residue.add_atom(Atom::new("H2", Element::H, n_pos + h2_dir * NH_BOND_LENGTH));
 
-    for (idx, phase) in phases.iter().take(target_count).enumerate() {
-        let phi = phase.to_radians();
-        let h_local = Vector3::new(sin_theta * phi.cos(), sin_theta * phi.sin(), -cos_theta);
-        let h_global = x * h_local.x + y * h_local.y + z * h_local.z;
-        let h_pos = n_pos + h_global * NH_BOND_LENGTH;
-        residue.add_atom(Atom::new(names[idx], Element::H, h_pos));
+        if protonated {
+            let h3_dir = v_mid * half_spread.cos() - v_perp * half_spread.sin();
+            residue.add_atom(Atom::new("H3", Element::H, n_pos + h3_dir * NH_BOND_LENGTH));
+        }
+    } else {
+        let target_count = if protonated { 3 } else { 2 };
+        let (x, y, z) = build_sp3_frame(n_pos, ca_pos, None);
+
+        let theta = SP3_ANGLE.to_radians();
+        let sin_theta = theta.sin();
+        let cos_theta = theta.cos();
+
+        let phases = [0.0_f64, 120.0, 240.0];
+        let names = ["H1", "H2", "H3"];
+
+        for (idx, phase) in phases.iter().take(target_count).enumerate() {
+            let phi = phase.to_radians();
+            let h_local = Vector3::new(sin_theta * phi.cos(), sin_theta * phi.sin(), -cos_theta);
+            let h_global = x * h_local.x + y * h_local.y + z * h_local.z;
+            residue.add_atom(Atom::new(
+                names[idx],
+                Element::H,
+                n_pos + h_global * NH_BOND_LENGTH,
+            ));
+        }
     }
 
     Ok(())
