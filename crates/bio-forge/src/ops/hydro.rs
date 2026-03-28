@@ -1110,6 +1110,12 @@ mod tests {
         residue
     }
 
+    fn n_terminal_pro_residue(id: i32) -> Residue {
+        let mut residue = residue_from_template("PRO", StandardResidue::PRO, id);
+        residue.position = ResiduePosition::NTerminal;
+        residue
+    }
+
     fn c_terminal_residue(id: i32) -> Residue {
         let mut residue = residue_from_template("ALA", StandardResidue::ALA, id);
         residue.position = ResiduePosition::CTerminal;
@@ -2241,6 +2247,137 @@ mod tests {
         assert!(
             (h1_n_h3_angle - SP3_ANGLE).abs() < 5.0,
             "H1-N-H3 angle {h1_n_h3_angle:.1}° should be ~{SP3_ANGLE}°"
+        );
+    }
+
+    #[test]
+    fn pro_n_terminal_defaults_to_protonated_without_ph() {
+        let residue = n_terminal_pro_residue(42);
+        let mut structure = structure_with_residue(residue);
+
+        add_hydrogens(&mut structure, &HydroConfig::default()).unwrap();
+
+        let residue = structure.find_residue("A", 42, None).unwrap();
+        assert!(
+            !residue.has_atom("H1"),
+            "PRO N-term must not have H1 (ring N-CD occupies that valence)"
+        );
+        assert!(residue.has_atom("H2"));
+        assert!(
+            residue.has_atom("H3"),
+            "PRO N-term should have 2 H at default pH 7.0"
+        );
+    }
+
+    #[test]
+    fn pro_n_terminal_remains_protonated_below_pka() {
+        let residue = n_terminal_pro_residue(42);
+        let mut structure = structure_with_residue(residue);
+        let config = HydroConfig {
+            target_ph: Some(7.0),
+            ..HydroConfig::default()
+        };
+
+        add_hydrogens(&mut structure, &config).unwrap();
+
+        let residue = structure.find_residue("A", 42, None).unwrap();
+        assert!(
+            !residue.has_atom("H1"),
+            "PRO N-term must not have H1 (ring N-CD occupies that valence)"
+        );
+        assert!(residue.has_atom("H2"));
+        assert!(
+            residue.has_atom("H3"),
+            "PRO N-term should have 2 H below pKa 8.0"
+        );
+    }
+
+    #[test]
+    fn pro_n_terminal_deprotonates_above_pka() {
+        let residue = n_terminal_pro_residue(43);
+        let mut structure = structure_with_residue(residue);
+        let config = HydroConfig {
+            target_ph: Some(9.0),
+            ..HydroConfig::default()
+        };
+
+        add_hydrogens(&mut structure, &config).unwrap();
+
+        let residue = structure.find_residue("A", 43, None).unwrap();
+        assert!(
+            !residue.has_atom("H1"),
+            "PRO N-term must not have H1 (ring N-CD occupies that valence)"
+        );
+        assert!(residue.has_atom("H2"));
+        assert!(
+            !residue.has_atom("H3"),
+            "PRO N-term should have only 1 H above pKa 8.0"
+        );
+    }
+
+    #[test]
+    fn pro_n_terminal_h_has_tetrahedral_bond_lengths() {
+        let residue = n_terminal_pro_residue(96);
+        let mut structure = structure_with_residue(residue);
+
+        add_hydrogens(&mut structure, &HydroConfig::default()).unwrap();
+
+        let residue = structure.find_residue("A", 96, None).unwrap();
+        let n = residue.atom("N").expect("N").pos;
+        let h2 = residue.atom("H2").expect("H2").pos;
+        let h3 = residue.atom("H3").expect("H3").pos;
+
+        let n_h2_dist = distance(n, h2);
+        let n_h3_dist = distance(n, h3);
+        assert!(
+            (n_h2_dist - NH_BOND_LENGTH).abs() < 0.1,
+            "N-H2 distance {n_h2_dist:.3} should be ~{NH_BOND_LENGTH} Å"
+        );
+        assert!(
+            (n_h3_dist - NH_BOND_LENGTH).abs() < 0.1,
+            "N-H3 distance {n_h3_dist:.3} should be ~{NH_BOND_LENGTH} Å"
+        );
+    }
+
+    #[test]
+    fn pro_n_terminal_h_has_tetrahedral_bond_angles() {
+        let residue = n_terminal_pro_residue(96);
+        let mut structure = structure_with_residue(residue);
+
+        add_hydrogens(&mut structure, &HydroConfig::default()).unwrap();
+
+        let residue = structure.find_residue("A", 96, None).unwrap();
+        let n = residue.atom("N").expect("N").pos;
+        let ca = residue.atom("CA").expect("CA").pos;
+        let cd = residue.atom("CD").expect("CD").pos;
+        let h2 = residue.atom("H2").expect("H2").pos;
+        let h3 = residue.atom("H3").expect("H3").pos;
+
+        let ca_n_h2_angle = angle_deg(ca, n, h2);
+        let ca_n_h3_angle = angle_deg(ca, n, h3);
+        let cd_n_h2_angle = angle_deg(cd, n, h2);
+        let cd_n_h3_angle = angle_deg(cd, n, h3);
+        let h2_n_h3_angle = angle_deg(h2, n, h3);
+
+        assert!(
+            (ca_n_h2_angle - SP3_ANGLE).abs() < 5.0,
+            "CA-N-H2 angle {ca_n_h2_angle:.1}° should be ~{SP3_ANGLE}°"
+        );
+        assert!(
+            (ca_n_h3_angle - SP3_ANGLE).abs() < 5.0,
+            "CA-N-H3 angle {ca_n_h3_angle:.1}° should be ~{SP3_ANGLE}°"
+        );
+        assert!(
+            (cd_n_h2_angle - SP3_ANGLE).abs() < 5.0,
+            "CD-N-H2 angle {cd_n_h2_angle:.1}° should be ~{SP3_ANGLE}°"
+        );
+        assert!(
+            (cd_n_h3_angle - SP3_ANGLE).abs() < 5.0,
+            "CD-N-H3 angle {cd_n_h3_angle:.1}° should be ~{SP3_ANGLE}°"
+        );
+        assert!(
+            (h2_n_h3_angle - SP3_ANGLE).abs() < 5.0,
+            "H2-N-H3 angle {h2_n_h3_angle:.1}° should be ~{SP3_ANGLE}°"
         );
     }
 
