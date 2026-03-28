@@ -134,8 +134,8 @@ pub fn add_hydrogens(structure: &mut Structure, config: &HydroConfig) -> Result<
         None
     };
 
-    if config.target_ph.is_some() {
-        apply_non_his_protonation(structure, config.target_ph.unwrap());
+    if let Some(ph) = config.target_ph {
+        apply_non_his_protonation(structure, ph);
     }
 
     let carboxylate_grid = if config.his_salt_bridge_protonation {
